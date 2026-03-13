@@ -1,0 +1,1854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Memory System Interface</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ============================================
+           CSS VARIABLES & RESET
+           ============================================ */
+        :root {
+            --bg-color: #050810;
+            --working-memory: #00d4ff;
+            --episodic-memory: #a78bfa;
+            --semantic-memory: #34d399;
+            --consolidation: #fbbf24;
+            --core-white: #ffffff;
+            --grid-color: rgba(255, 255, 255, 0.03);
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --border-color: rgba(255, 255, 255, 0.1);
+            
+            --font-heading: 'Space Grotesk', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: var(--font-heading);
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        /* ============================================
+           BACKGROUND GRID
+           ============================================ */
+        .background-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        /* ============================================
+           LAYOUT STRUCTURE
+           ============================================ */
+        .app-container {
+            display: grid;
+            grid-template-rows: 60px 1fr 80px;
+            grid-template-columns: 300px 1fr 350px;
+            height: 100vh;
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* ============================================
+           TOP BAR - AGENT STATUS
+           ============================================ */
+        .top-bar {
+            grid-column: 1 / -1;
+            background: rgba(5, 8, 16, 0.9);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .agent-status {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .agent-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .agent-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--working-memory);
+            border-radius: 50%;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.2); }
+        }
+        
+        .status-label {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .status-value {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .memory-counts {
+            display: flex;
+            gap: 24px;
+        }
+        
+        .memory-count {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .memory-count-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .memory-count-value {
+            font-family: var(--font-heading);
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .count-working { color: var(--working-memory); }
+        .count-episodic { color: var(--episodic-memory); }
+        .count-semantic { color: var(--semantic-memory); }
+        
+        .consolidation-progress {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .progress-bar {
+            width: 120px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: var(--consolidation);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 3px;
+        }
+        
+        .progress-label {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--consolidation);
+        }
+        
+        /* ============================================
+           LEFT PANEL - EPISODIC TIMELINE
+           ============================================ */
+        .episodic-panel {
+            background: rgba(5, 8, 16, 0.7);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .panel-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--episodic-memory);
+        }
+        
+        .timeline-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        
+        .timeline-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .timeline-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .timeline-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        
+        .timeline-event {
+            background: rgba(167, 139, 250, 0.08);
+            border: 1px solid rgba(167, 139, 250, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .timeline-event:hover {
+            background: rgba(167, 139, 250, 0.15);
+            border-color: rgba(167, 139, 250, 0.4);
+            transform: translateX(4px);
+        }
+        
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -17px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 6px;
+            height: 6px;
+            background: var(--episodic-memory);
+            border-radius: 50%;
+        }
+        
+        .event-time {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        
+        .event-type {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .type-conversation { background: rgba(0, 212, 255, 0.2); color: var(--working-memory); }
+        .type-decision { background: rgba(251, 191, 36, 0.2); color: var(--consolidation); }
+        .type-error { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .type-success { background: rgba(52, 211, 153, 0.2); color: var(--semantic-memory); }
+        
+        .event-content {
+            font-size: 12px;
+            line-height: 1.5;
+            margin-bottom: 8px;
+        }
+        
+        .event-importance {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        
+        .importance-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .importance-dot.active {
+            background: var(--episodic-memory);
+        }
+        
+        .reactivate-btn {
+            background: transparent;
+            border: 1px solid var(--episodic-memory);
+            color: var(--episodic-memory);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+        }
+        
+        .reactivate-btn:hover {
+            background: var(--episodic-memory);
+            color: var(--bg-color);
+        }
+        
+        /* ============================================
+           CENTER AREA - CORE & WORKING MEMORY
+           ============================================ */
+        .center-area {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #mainCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* ============================================
+           RIGHT PANEL - SEMANTIC GRAPH
+           ============================================ */
+        .semantic-panel {
+            background: rgba(5, 8, 16, 0.7);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .graph-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .graph-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--semantic-memory);
+        }
+        
+        .add-node-btn {
+            background: transparent;
+            border: 1px solid var(--semantic-memory);
+            color: var(--semantic-memory);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .add-node-btn:hover {
+            background: var(--semantic-memory);
+            color: var(--bg-color);
+        }
+        
+        .node-details {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            min-height: 120px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .node-details-empty {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .node-detail-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--semantic-memory);
+            margin-bottom: 8px;
+        }
+        
+        .node-detail-info {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+        
+        .relationships-list {
+            margin-top: 12px;
+        }
+        
+        .relationship-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
+        
+        .relationship-arrow {
+            color: var(--semantic-memory);
+        }
+        
+        .graph-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #graphCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* ============================================
+           BOTTOM BAR - MEMORY CONSOLE
+           ============================================ */
+        .bottom-bar {
+            grid-column: 1 / -1;
+            background: rgba(5, 8, 16, 0.95);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 16px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .console-prompt {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--working-memory);
+            white-space: nowrap;
+        }
+        
+        .console-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-primary);
+            padding: 8px 0;
+        }
+        
+        .console-input::placeholder {
+            color: var(--text-secondary);
+        }
+        
+        .console-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .console-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 6px 16px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .console-btn:hover {
+            border-color: var(--working-memory);
+            color: var(--working-memory);
+        }
+        
+        .console-output {
+            position: absolute;
+            bottom: 80px;
+            left: 24px;
+            right: 24px;
+            background: rgba(5, 8, 16, 0.95);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+            max-height: 150px;
+            overflow-y: auto;
+            display: none;
+            z-index: 100;
+        }
+        
+        .console-output.visible {
+            display: block;
+        }
+        
+        .output-line {
+            margin-bottom: 4px;
+            line-height: 1.5;
+        }
+        
+        .output-success { color: var(--semantic-memory); }
+        .output-error { color: #ef4444; }
+        .output-info { color: var(--working-memory); }
+        
+        /* ============================================
+           MODAL DIALOGS
+           ============================================ */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-overlay.visible {
+            display: flex;
+        }
+        
+        .modal {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            width: 400px;
+            max-width: 90%;
+        }
+        
+        .modal-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+        
+        .modal-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .modal-input:focus {
+            outline: none;
+            border-color: var(--working-memory);
+        }
+        
+        .modal-select {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            cursor: pointer;
+        }
+        
+        .modal-select:focus {
+            outline: none;
+            border-color: var(--working-memory);
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        
+        .modal-btn {
+            padding: 8px 20px;
+            border-radius: 6px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+        
+        .modal-btn-cancel {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+        
+        .modal-btn-cancel:hover {
+            border-color: var(--text-primary);
+            color: var(--text-primary);
+        }
+        
+        .modal-btn-submit {
+            background: var(--working-memory);
+            color: var(--bg-color);
+            border: none;
+        }
+        
+        .modal-btn-submit:hover {
+            opacity: 0.9;
+        }
+        
+        /* ============================================
+           WORKING MEMORY EXPANSION OVERLAY
+           ============================================ */
+        .memory-expansion {
+            position: fixed;
+            background: rgba(5, 8, 16, 0.98);
+            border: 1px solid var(--working-memory);
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 400px;
+            z-index: 500;
+            display: none;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.2);
+        }
+        
+        .memory-expansion.visible {
+            display: block;
+        }
+        
+        .expansion-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        
+        .expansion-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--working-memory);
+        }
+        
+        .expansion-close {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0;
+            line-height: 1;
+        }
+        
+        .expansion-close:hover {
+            color: var(--text-primary);
+        }
+        
+        .expansion-content {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        
+        /* ============================================
+           ANIMATIONS
+           ============================================ */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease;
+        }
+        
+        /* Consolidation particle animation */
+        .consolidation-particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--consolidation);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 200;
+        }
+    </style>
+</head>
+<body>
+    <!-- Background Grid -->
+    <div class="background-grid"></div>
+    
+    <!-- Main Application Container -->
+    <div class="app-container">
+        <!-- Top Bar: Agent Status -->
+        <header class="top-bar">
+            <div class="agent-status">
+                <div class="agent-indicator">
+                    <div class="agent-dot"></div>
+                    <span class="status-label">AGENT STATUS:</span>
+                    <span class="status-value" id="agentStatus">ACTIVE</span>
+                </div>
+                <div class="agent-indicator">
+                    <span class="status-label">ATTENTION:</span>
+                    <span class="status-value" id="attentionLevel">87%</span>
+                </div>
+            </div>
+            
+            <div class="memory-counts">
+                <div class="memory-count">
+                    <span class="memory-count-label">Working</span>
+                    <span class="memory-count-value count-working" id="workingCount">0</span>
+                </div>
+                <div class="memory-count">
+                    <span class="memory-count-label">Episodic</span>
+                    <span class="memory-count-value count-episodic" id="episodicCount">0</span>
+                </div>
+                <div class="memory-count">
+                    <span class="memory-count-label">Semantic</span>
+                    <span class="memory-count-value count-semantic" id="semanticCount">0</span>
+                </div>
+            </div>
+            
+            <div class="consolidation-progress">
+                <span class="progress-label">CONSOLIDATION</span>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="consolidationProgress"></div>
+                </div>
+                <span class="progress-label" id="consolidationPercent">0%</span>
+            </div>
+        </header>
+        
+        <!-- Left Panel: Episodic Timeline -->
+        <aside class="episodic-panel">
+            <div class="panel-header">
+                <h2 class="panel-title">EPISODIC MEMORY</h2>
+            </div>
+            <div class="timeline-container" id="timelineContainer">
+                <!-- Events will be injected here by JavaScript -->
+            </div>
+        </aside>
+        
+        <!-- Center Area: Core & Working Memory -->
+        <main class="center-area">
+            <canvas id="mainCanvas"></canvas>
+        </main>
+        
+        <!-- Right Panel: Semantic Graph -->
+        <aside class="semantic-panel">
+            <div class="graph-header">
+                <h2 class="graph-title">SEMANTIC KNOWLEDGE</h2>
+                <button class="add-node-btn" id="addNodeBtn">+ ADD NODE</button>
+            </div>
+            <div class="node-details" id="nodeDetails">
+                <div class="node-details-empty">Select a node to view details</div>
+            </div>
+            <div class="graph-container">
+                <canvas id="graphCanvas"></canvas>
+            </div>
+        </aside>
+        
+        <!-- Bottom Bar: Memory Console -->
+        <footer class="bottom-bar">
+            <span class="console-prompt">MEMORY_CONSOLE&gt;</span>
+            <input type="text" class="console-input" id="consoleInput" placeholder="Enter command: recall [query], inject [type] [content], consolidate, clear working, status" autocomplete="off">
+            <div class="console-actions">
+                <button class="console-btn" id="injectMemoryBtn">INJECT MEMORY</button>
+                <button class="console-btn" id="runConsolidateBtn">CONSOLIDATE</button>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- Console Output Display -->
+    <div class="console-output" id="consoleOutput"></div>
+    
+    <!-- Memory Expansion Overlay -->
+    <div class="memory-expansion" id="memoryExpansion">
+        <div class="expansion-header">
+            <span class="expansion-title">WORKING MEMORY DETAIL</span>
+            <button class="expansion-close" id="expansionClose">&times;</button>
+        </div>
+        <div class="expansion-content" id="expansionContent"></div>
+    </div>
+    
+    <!-- Inject Memory Modal -->
+    <div class="modal-overlay" id="injectModal">
+        <div class="modal">
+            <h3 class="modal-title">Inject New Memory</h3>
+            <textarea class="modal-input" id="injectContent" placeholder="Enter memory content..."></textarea>
+            <select class="modal-select" id="injectType">
+                <option value="working">Working Memory</option>
+                <option value="episodic">Episodic Memory</option>
+                <option value="semantic">Semantic Memory</option>
+            </select>
+            <div class="modal-actions">
+                <button class="modal-btn modal-btn-cancel" id="injectCancel">CANCEL</button>
+                <button class="modal-btn modal-btn-submit" id="injectSubmit">INJECT</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add Node Modal -->
+    <div class="modal-overlay" id="addNodeModal">
+        <div class="modal">
+            <h3 class="modal-title">Add Knowledge Node</h3>
+            <input type="text" class="modal-input" id="nodeName" placeholder="Node name..." style="min-height: auto;">
+            <textarea class="modal-input" id="nodeDescription" placeholder="Node description..."></textarea>
+            <div class="modal-actions">
+                <button class="modal-btn modal-btn-cancel" id="addNodeCancel">CANCEL</button>
+                <button class="modal-btn modal-btn-submit" id="addNodeSubmit">ADD NODE</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ============================================
+           DATA STRUCTURES & STATE MANAGEMENT
+           ============================================ */
+        
+        // Working Memory Data (max 7 items)
+        const workingMemory = [
+            { id: 'wm1', content: 'Analyzing user query about memory systems', timestamp: Date.now() - 120000 },
+            { id: 'wm2', content: 'Current task: build visualization', timestamp: Date.now() - 95000 },
+            { id: 'wm3', content: 'User preference: no heavy glow', timestamp: Date.now() - 78000 },
+            { id: 'wm4', content: 'Context: AI agent project', timestamp: Date.now() - 62000 },
+            { id: 'wm5', content: 'Previous interaction: neural network demo', timestamp: Date.now() - 45000 },
+            { id: 'wm6', content: 'Goal: impress the viewer', timestamp: Date.now() - 28000 },
+            { id: 'wm7', content: 'Active tool: code generation', timestamp: Date.now() - 12000 }
+        ];
+        
+        // Episodic Memory Data (last 8 events)
+        const episodicMemory = [
+            { 
+                id: 'ep1', 
+                type: 'conversation', 
+                content: 'User requested advanced memory system visualization with three layers', 
+                timestamp: Date.now() - 3600000, 
+                importance: 3,
+                outcome: 'Requirements gathered'
+            },
+            { 
+                id: 'ep2', 
+                type: 'decision', 
+                content: 'Chose Canvas 2D over Three.js for lightweight implementation', 
+                timestamp: Date.now() - 3300000, 
+                importance: 2,
+                outcome: 'Performance optimized'
+            },
+            { 
+                id: 'ep3', 
+                type: 'success', 
+                content: 'Successfully implemented working memory orbital system', 
+                timestamp: Date.now() - 2900000, 
+                importance: 3,
+                outcome: 'Core functionality complete'
+            },
+            { 
+                id: 'ep4', 
+                type: 'error', 
+                content: 'Initial consolidation animation caused performance drop', 
+                timestamp: Date.now() - 2500000, 
+                importance: 2,
+                outcome: 'Optimized particle system'
+            },
+            { 
+                id: 'ep5', 
+                type: 'conversation', 
+                content: 'User emphasized clean visual style without excessive glow', 
+                timestamp: Date.now() - 2100000, 
+                importance: 2,
+                outcome: 'Design direction clarified'
+            },
+            { 
+                id: 'ep6', 
+                type: 'success', 
+                content: 'Semantic graph node interaction implemented with hover focus', 
+                timestamp: Date.now() - 1700000, 
+                importance: 3,
+                outcome: 'Enhanced UX'
+            },
+            { 
+                id: 'ep7', 
+                type: 'decision', 
+                content: 'Implemented Space Grotesk and JetBrains Mono font pairing', 
+                timestamp: Date.now() - 1200000, 
+                importance: 1,
+                outcome: 'Visual identity established'
+            },
+            { 
+                id: 'ep8', 
+                type: 'success', 
+                content: 'Console command system fully functional', 
+                timestamp: Date.now() - 600000, 
+                importance: 3,
+                outcome: 'Interactive control enabled'
+            }
+        ];
+        
+        // Semantic Memory Data (15 nodes with relationships)
+        const semanticMemory = {
+            nodes: [
+                { id: 'sm1', label: 'AI Agents', size: 25, x: 150, y: 120, description: 'Autonomous intelligent systems capable of perception, reasoning, and action' },
+                { id: 'sm2', label: 'Memory Systems', size: 28, x: 280, y: 80, description: 'Architectures for storing, retrieving, and processing information' },
+                { id: 'sm3', label: 'Python', size: 20, x: 420, y: 150, description: 'Programming language used for AI development and automation' },
+                { id: 'sm4', label: 'User Preferences', size: 18, x: 100, y: 250, description: 'Configurable settings and choices specific to individual users' },
+                { id: 'sm5', label: 'Web APIs', size: 22, x: 350, y: 220, description: 'Interfaces for web-based service integration' },
+                { id: 'sm6', label: 'n8n', size: 16, x: 480, y: 280, description: 'Workflow automation platform' },
+                { id: 'sm7', label: 'OpenClaw', size: 15, x: 520, y: 180, description: 'Open-source automation framework' },
+                { id: 'sm8', label: 'Automation', size: 24, x: 380, y: 320, description: 'Systems that operate with minimal human intervention' },
+                { id: 'sm9', label: 'Neural Networks', size: 26, x: 200, y: 350, description: 'Computing systems inspired by biological neural networks' },
+                { id: 'sm10', label: 'Knowledge Graph', size: 21, x: 120, y: 180, description: 'Graph-based representation of interconnected knowledge' },
+                { id: 'sm11', label: 'Visualization', size: 19, x: 250, y: 380, description: 'Visual representation of data and systems' },
+                { id: 'sm12', label: 'Frontend', size: 17, x: 320, y: 420, description: 'User-facing interface layer' },
+                { id: 'sm13', label: 'Backend API', size: 20, x: 450, y: 380, description: 'Server-side application programming interface' },
+                { id: 'sm14', label: 'Data Processing', size: 18, x: 500, y: 320, description: 'Transformation and analysis of information' },
+                { id: 'sm15', label: 'Machine Learning', size: 23, x: 180, y: 420, description: 'Algorithms that improve through experience' }
+            ],
+            edges: [
+                { from: 'sm1', to: 'sm2', weight: 0.9 },
+                { from: 'sm1', to: 'sm9', weight: 0.8 },
+                { from: 'sm1', to: 'sm15', weight: 0.85 },
+                { from: 'sm2', to: 'sm10', weight: 0.9 },
+                { from: 'sm2', to: 'sm14', weight: 0.7 },
+                { from: 'sm3', to: 'sm9', weight: 0.75 },
+                { from: 'sm3', to: 'sm15', weight: 0.8 },
+                { from: 'sm5', to: 'sm6', weight: 0.85 },
+                { from: 'sm5', to: 'sm7', weight: 0.7 },
+                { from: 'sm6', to: 'sm8', weight: 0.9 },
+                { from: 'sm7', to: 'sm8', weight: 0.8 },
+                { from: 'sm8', to: 'sm13', weight: 0.75 },
+                { from: 'sm9', to: 'sm15', weight: 0.95 },
+                { from: 'sm10', to: 'sm11', weight: 0.8 },
+                { from: 'sm11', to: 'sm12', weight: 0.85 },
+                { from: 'sm12', to: 'sm13', weight: 0.9 },
+                { from: 'sm13', to: 'sm14', weight: 0.8 },
+                { from: 'sm14', to: 'sm2', weight: 0.75 },
+                { from: 'sm15', to: 'sm1', weight: 0.85 }
+            ]
+        };
+        
+        // Application State
+        const appState = {
+            selectedNode: null,
+            hoveredNode: null,
+            expandedMemory: null,
+            consolidationProgress: 0,
+            isConsolidating: false,
+            attentionLevel: 87,
+            lastConsolidation: Date.now()
+        };
+        
+        /* ============================================
+           CANVAS SETUP & RENDERING
+           ============================================ */
+        
+        // Main Canvas (Center Area - Core & Working Memory)
+        const mainCanvas = document.getElementById('mainCanvas');
+        const mainCtx = mainCanvas.getContext('2d');
+        
+        // Graph Canvas (Right Panel - Semantic Network)
+        const graphCanvas = document.getElementById('graphCanvas');
+        const graphCtx = graphCanvas.getContext('2d');
+        
+        let mainCanvasRect = mainCanvas.getBoundingClientRect();
+        let graphCanvasRect = graphCanvas.getBoundingClientRect();
+        
+        function resizeCanvases() {
+            mainCanvas.width = mainCanvas.offsetWidth;
+            mainCanvas.height = mainCanvas.offsetHeight;
+            graphCanvas.width = graphCanvas.offsetWidth;
+            graphCanvas.height = graphCanvas.offsetHeight;
+            
+            mainCanvasRect = mainCanvas.getBoundingClientRect();
+            graphCanvasRect = graphCanvas.getBoundingClientRect();
+        }
+        
+        window.addEventListener('resize', resizeCanvases);
+        resizeCanvases();
+        
+        /* ============================================
+           WORKING MEMORY ORBITAL SYSTEM
+           ============================================ */
+        
+        const corePosition = { x: 0, y: 0 };
+        const orbitRadius = 140;
+        const orbitSpeed = 0.0005;
+        let orbitOffset = 0;
+        
+        function updateCorePosition() {
+            corePosition.x = mainCanvas.width / 2;
+            corePosition.y = mainCanvas.height / 2;
+        }
+        
+        function getWorkingMemoryPosition(index, total, time) {
+            const angle = (index / total) * Math.PI * 2 + orbitOffset + time * orbitSpeed;
+            return {
+                x: corePosition.x + Math.cos(angle) * orbitRadius,
+                y: corePosition.y + Math.sin(angle) * orbitRadius
+            };
+        }
+        
+        function drawCore(ctx) {
+            // Core glow effect (only around core)
+            const gradient = ctx.createRadialGradient(
+                corePosition.x, corePosition.y, 0,
+                corePosition.x, corePosition.y, 60
+            );
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
+            gradient.addColorStop(0.5, 'rgba(0, 212, 255, 0.1)');
+            gradient.addColorStop(1, 'rgba(0, 212, 255, 0)');
+            
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(corePosition.x, corePosition.y, 60, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Core circle
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(corePosition.x, corePosition.y, 20, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Subtle blue ring
+            ctx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(corePosition.x, corePosition.y, 25, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        
+        function drawWorkingMemoryBubbles(ctx, time) {
+            workingMemory.forEach((item, index) => {
+                const pos = getWorkingMemoryPosition(index, workingMemory.length, time);
+                
+                // Bubble
+                ctx.fillStyle = 'rgba(0, 212, 255, 0.15)';
+                ctx.strokeStyle = '#00d4ff';
+                ctx.lineWidth = 1.5;
+                
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 18, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                
+                // Connection line to core (animated pulse)
+                const pulsePhase = (time + index * 200) % 2000;
+                const alpha = 0.2 + Math.sin(pulsePhase * Math.PI / 2000) * 0.3;
+                
+                ctx.strokeStyle = `rgba(0, 212, 255, ${alpha})`;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([5, 5]);
+                ctx.lineDashOffset = -(time % 20) / 2;
+                
+                ctx.beginPath();
+                ctx.moveTo(corePosition.x, corePosition.y);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
+                
+                ctx.setLineDash([]);
+                
+                // Store position for interaction
+                item.x = pos.x;
+                item.y = pos.y;
+            });
+        }
+        
+        function drawOrbitRing(ctx) {
+            ctx.strokeStyle = 'rgba(0, 212, 255, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(corePosition.x, corePosition.y, orbitRadius, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        
+        /* ============================================
+           SEMANTIC GRAPH RENDERING
+           ============================================ */
+        
+        function drawSemanticGraph(ctx, highlightNode = null) {
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            
+            // Draw edges first
+            semanticMemory.edges.forEach(edge => {
+                const fromNode = semanticMemory.nodes.find(n => n.id === edge.from);
+                const toNode = semanticMemory.nodes.find(n => n.id === edge.to);
+                
+                if (!fromNode || !toNode) return;
+                
+                // Check if edge should be highlighted
+                let alpha = 0.15;
+                let lineWidth = 1;
+                
+                if (highlightNode) {
+                    if (fromNode.id === highlightNode.id || toNode.id === highlightNode.id) {
+                        alpha = 0.6;
+                        lineWidth = 2;
+                    } else {
+                        alpha = 0.05;
+                    }
+                }
+                
+                ctx.strokeStyle = `rgba(52, 211, 153, ${alpha})`;
+                ctx.lineWidth = lineWidth;
+                
+                ctx.beginPath();
+                ctx.moveTo(fromNode.x, fromNode.y);
+                ctx.lineTo(toNode.x, toNode.y);
+                ctx.stroke();
+            });
+            
+            // Draw nodes
+            semanticMemory.nodes.forEach(node => {
+                let alpha = 1;
+                let radius = node.size;
+                
+                if (highlightNode && node.id !== highlightNode.id) {
+                    // Check if connected to highlighted node
+                    const isConnected = semanticMemory.edges.some(e => 
+                        (e.from === highlightNode.id && e.to === node.id) ||
+                        (e.to === highlightNode.id && e.from === node.id)
+                    );
+                    
+                    if (!isConnected) {
+                        alpha = 0.2;
+                    }
+                }
+                
+                // Node circle
+                const gradient = ctx.createRadialGradient(
+                    node.x, node.y, 0,
+                    node.x, node.y, radius
+                );
+                gradient.addColorStop(0, `rgba(52, 211, 153, ${alpha})`);
+                gradient.addColorStop(1, `rgba(52, 211, 153, ${alpha * 0.3})`);
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Node border
+                ctx.strokeStyle = `rgba(52, 211, 153, ${alpha})`;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                // Node label
+                ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.font = '11px "Space Grotesk"';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(node.label, node.x, node.y);
+                
+                // Store canvas position for interaction
+                node.canvasX = node.x;
+                node.canvasY = node.y;
+            });
+        }
+        
+        /* ============================================
+           CONSOLIDATION ANIMATION SYSTEM
+           ============================================ */
+        
+        function createConsolidationParticle(fromX, fromY, toX, toY) {
+            const particle = document.createElement('div');
+            particle.className = 'consolidation-particle';
+            particle.style.left = fromX + 'px';
+            particle.style.top = fromY + 'px';
+            document.body.appendChild(particle);
+            
+            const duration = 2000;
+            const startTime = Date.now();
+            
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Easing function
+                const easeProgress = 1 - Math.pow(1 - progress, 3);
+                
+                const currentX = fromX + (toX - fromX) * easeProgress;
+                const currentY = fromY + (toY - toY) * easeProgress;
+                
+                particle.style.left = currentX + 'px';
+                particle.style.top = currentY + 'px';
+                particle.style.opacity = 1 - progress;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    particle.remove();
+                }
+            }
+            
+            requestAnimationFrame(animate);
+        }
+        
+        function runConsolidation() {
+            if (appState.isConsolidating) return;
+            
+            appState.isConsolidating = true;
+            appState.consolidationProgress = 0;
+            
+            const timelineContainer = document.getElementById('timelineContainer');
+            const timelineRect = timelineContainer.getBoundingClientRect();
+            
+            // Create particles from timeline to graph
+            const particleCount = 5;
+            for (let i = 0; i < particleCount; i++) {
+                setTimeout(() => {
+                    const fromX = timelineRect.right - 20;
+                    const fromY = timelineRect.top + Math.random() * timelineRect.height;
+                    const toX = graphCanvasRect.left + Math.random() * graphCanvasRect.width;
+                    const toY = graphCanvasRect.top + Math.random() * graphCanvasRect.height;
+                    
+                    createConsolidationParticle(fromX, fromY, toX, toY);
+                }, i * 400);
+            }
+            
+            // Animate progress bar
+            const progressBar = document.getElementById('consolidationProgress');
+            const progressPercent = document.getElementById('consolidationPercent');
+            
+            const interval = setInterval(() => {
+                appState.consolidationProgress += 2;
+                progressBar.style.width = appState.consolidationProgress + '%';
+                progressPercent.textContent = appState.consolidationProgress + '%';
+                
+                if (appState.consolidationProgress >= 100) {
+                    clearInterval(interval);
+                    appState.isConsolidating = false;
+                    appState.lastConsolidation = Date.now();
+                    
+                    showConsoleOutput('Consolidation complete: 3 episodic memories transformed into semantic knowledge', 'success');
+                }
+            }, 100);
+        }
+        
+        // Auto-consolidation every 30 seconds
+        setInterval(() => {
+            if (!appState.isConsolidating) {
+                runConsolidation();
+            }
+        }, 30000);
+        
+        /* ============================================
+           UI RENDERING FUNCTIONS
+           ============================================ */
+        
+        function renderTimeline() {
+            const container = document.getElementById('timelineContainer');
+            container.innerHTML = '';
+            
+            episodicMemory.forEach(event => {
+                const eventEl = document.createElement('div');
+                eventEl.className = 'timeline-event fade-in';
+                eventEl.dataset.id = event.id;
+                
+                const time = new Date(event.timestamp).toLocaleTimeString();
+                const importanceDots = Array(3).fill(0).map((_, i) => 
+                    `<div class="importance-dot ${i < event.importance ? 'active' : ''}"></div>`
+                ).join('');
+                
+                eventEl.innerHTML = `
+                    <div class="event-time">${time}</div>
+                    <span class="event-type type-${event.type}">${event.type}</span>
+                    <div class="event-content">${event.content}</div>
+                    <div class="event-importance">${importanceDots}</div>
+                    <button class="reactivate-btn" data-id="${event.id}">RE-ACTIVATE</button>
+                `;
+                
+                container.appendChild(eventEl);
+            });
+            
+            updateMemoryCounts();
+        }
+        
+        function updateMemoryCounts() {
+            document.getElementById('workingCount').textContent = workingMemory.length;
+            document.getElementById('episodicCount').textContent = episodicMemory.length;
+            document.getElementById('semanticCount').textContent = semanticMemory.nodes.length;
+        }
+        
+        function showNodeDetails(node) {
+            const detailsPanel = document.getElementById('nodeDetails');
+            
+            const relationships = semanticMemory.edges.filter(e => 
+                e.from === node.id || e.to === node.id
+            );
+            
+            const relationshipHTML = relationships.map(rel => {
+                const otherId = rel.from === node.id ? rel.to : rel.from;
+                const otherNode = semanticMemory.nodes.find(n => n.id === otherId);
+                const direction = rel.from === node.id ? '→' : '←';
+                return `
+                    <div class="relationship-item">
+                        <span>${direction}</span>
+                        <span>${otherNode.label}</span>
+                        <span style="color: var(--semantic-memory); margin-left: 4px;">(${rel.weight})</span>
+                    </div>
+                `;
+            }).join('');
+            
+            detailsPanel.innerHTML = `
+                <div class="node-detail-title">${node.label}</div>
+                <div class="node-detail-info">${node.description}</div>
+                <div class="relationships-list">
+                    <div style="font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); margin-bottom: 8px;">RELATIONSHIPS:</div>
+                    ${relationshipHTML}
+                </div>
+            `;
+        }
+        
+        function clearNodeDetails() {
+            document.getElementById('nodeDetails').innerHTML = 
+                '<div class="node-details-empty">Select a node to view details</div>';
+        }
+        
+        /* ============================================
+           INTERACTION HANDLERS
+           ============================================ */
+        
+        // Working Memory Bubble Click
+        mainCanvas.addEventListener('click', (e) => {
+            const rect = mainCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            workingMemory.forEach(item => {
+                const dx = x - item.x;
+                const dy = y - item.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < 20) {
+                    showMemoryExpansion(item, e.clientX, e.clientY);
+                }
+            });
+        });
+        
+        function showMemoryExpansion(item, clientX, clientY) {
+            const expansion = document.getElementById('memoryExpansion');
+            const content = document.getElementById('expansionContent');
+            
+            content.textContent = item.content;
+            expansion.classList.add('visible');
+            
+            // Position near the click
+            const rect = expansion.getBoundingClientRect();
+            let left = clientX + 10;
+            let top = clientY + 10;
+            
+            // Keep within viewport
+            if (left + rect.width > window.innerWidth) {
+                left = clientX - rect.width - 10;
+            }
+            if (top + rect.height > window.innerHeight) {
+                top = clientY - rect.height - 10;
+            }
+            
+            expansion.style.left = left + 'px';
+            expansion.style.top = top + 'px';
+            
+            appState.expandedMemory = item.id;
+        }
+        
+        document.getElementById('expansionClose').addEventListener('click', () => {
+            document.getElementById('memoryExpansion').classList.remove('visible');
+            appState.expandedMemory = null;
+        });
+        
+        // Drag Working Memory to Semantic Graph
+        let draggedMemory = null;
+        
+        mainCanvas.addEventListener('mousedown', (e) => {
+            const rect = mainCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            workingMemory.forEach(item => {
+                const dx = x - item.x;
+                const dy = y - item.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < 20) {
+                    draggedMemory = item;
+                }
+            });
+        });
+        
+        mainCanvas.addEventListener('mouseup', (e) => {
+            if (!draggedMemory) return;
+            
+            const rect = mainCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            
+            // Check if released near right edge (toward semantic graph)
+            if (x > rect.width - 50) {
+                // Transform to semantic node
+                const newNode = {
+                    id: 'sm' + (semanticMemory.nodes.length + 1),
+                    label: draggedMemory.content.substring(0, 20) + '...',
+                    size: 15,
+                    x: 100 + Math.random() * 200,
+                    y: 100 + Math.random() * 300,
+                    description: draggedMemory.content
+                };
+                
+                semanticMemory.nodes.push(newNode);
+                
+                // Remove from working memory
+                const index = workingMemory.findIndex(w => w.id === draggedMemory.id);
+                if (index > -1) {
+                    workingMemory.splice(index, 1);
+                }
+                
+                draggedMemory = null;
+                updateMemoryCounts();
+                showConsoleOutput('Working memory transformed into semantic knowledge', 'success');
+            }
+        });
+        
+        // Timeline Event Reactivation
+        document.getElementById('timelineContainer').addEventListener('click', (e) => {
+            if (e.target.classList.contains('reactivate-btn') || e.target.closest('.timeline-event')) {
+                const eventEl = e.target.closest('.timeline-event');
+                if (!eventEl) return;
+                
+                const eventId = eventEl.dataset.id;
+                const event = episodicMemory.find(e => e.id === eventId);
+                
+                if (event && workingMemory.length < 7) {
+                    workingMemory.push({
+                        id: 'wm' + Date.now(),
+                        content: event.content,
+                        timestamp: Date.now()
+                    });
+                    
+                    // Draw activation line
+                    drawActivationLine();
+                    
+                    updateMemoryCounts();
+                    showConsoleOutput(`Event reactivated: ${event.content.substring(0, 30)}...`, 'info');
+                } else if (workingMemory.length >= 7) {
+                    showConsoleOutput('Working memory full (max 7 items)', 'error');
+                }
+            }
+        });
+        
+        function drawActivationLine() {
+            // Visual feedback for reactivation
+            const timelineContainer = document.getElementById('timelineContainer');
+            const timelineRect = timelineContainer.getBoundingClientRect();
+            
+            const line = document.createElement('div');
+            line.style.position = 'fixed';
+            line.style.left = timelineRect.right + 'px';
+            line.style.top = (timelineRect.top + timelineRect.height / 2) + 'px';
+            line.style.width = '0px';
+            line.style.height = '2px';
+            line.style.background = 'var(--episodic-memory)';
+            line.style.zIndex = '1000';
+            document.body.appendChild(line);
+            
+            const targetX = corePosition.x;
+            const targetY = corePosition.y;
+            const startX = timelineRect.right;
+            const startY = timelineRect.top + timelineRect.height / 2;
+            
+            const duration = 800;
+            const startTime = Date.now();
+            
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                const currentX = startX + (targetX - startX) * progress;
+                const currentWidth = currentX - startX;
+                
+                line.style.left = startX + 'px';
+                line.style.width = currentWidth + 'px';
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    line.remove();
+                }
+            }
+            
+            requestAnimationFrame(animate);
+        }
+        
+        // Semantic Graph Node Interaction
+        graphCanvas.addEventListener('click', (e) => {
+            const rect = graphCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            semanticMemory.nodes.forEach(node => {
+                const dx = x - node.canvasX;
+                const dy = y - node.canvasY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < node.size) {
+                    appState.selectedNode = node;
+                    showNodeDetails(node);
+                    drawSemanticGraph(graphCtx, node);
+                }
+            });
+        });
+        
+        graphCanvas.addEventListener('mousemove', (e) => {
+            const rect = graphCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            let hoveredNode = null;
+            
+            semanticMemory.nodes.forEach(node => {
+                const dx = x - node.canvasX;
+                const dy = y - node.canvasY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < node.size) {
+                    hoveredNode = node;
+                }
+            });
+            
+            if (hoveredNode !== appState.hoveredNode) {
+                appState.hoveredNode = hoveredNode;
+                graphCanvas.style.cursor = hoveredNode ? 'pointer' : 'default';
+                
+                if (!appState.selectedNode) {
+                    drawSemanticGraph(graphCtx, hoveredNode);
+                }
+            }
+        });
+        
+        graphCanvas.addEventListener('mouseleave', () => {
+            appState.hoveredNode = null;
+            graphCanvas.style.cursor = 'default';
+            
+            if (!appState.selectedNode) {
+                drawSemanticGraph(graphCtx, null);
+            }
+        });
+        
+        /* ============================================
+           CONSOLE COMMAND SYSTEM
+           ============================================ */
+        
+        const consoleInput = document.getElementById('consoleInput');
+        const consoleOutput = document.getElementById('consoleOutput');
+        
+        function showConsoleOutput(message, type = 'info') {
+            const line = document.createElement('div');
+            line.className = `output-line output-${type}`;
+            line.textContent = `> ${message}`;
+            
+            consoleOutput.appendChild(line);
+            consoleOutput.classList.add('visible');
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                if (consoleOutput.children.length <= 5) {
+                    consoleOutput.classList.remove('visible');
+                }
+            }, 5000);
+        }
+        
+        function parseCommand(input) {
+            const parts = input.trim().split(' ');
+            const command = parts[0].toLowerCase();
+            const args = parts.slice(1);
+            
+            switch (command) {
+                case 'recall':
+                    const query = args.join(' ');
+                    const results = searchMemories(query);
+                    showConsoleOutput(`Found ${results.length} matching memories: ${results.map(r => r.content.substring(0, 30)).join(', ')}`, 'success');
+                    break;
+                    
+                case 'inject':
+                    if (args.length < 2) {
+                        showConsoleOutput('Usage: inject [type] [content]', 'error');
+                        return;
+                    }
+                    const type = args[0];
+                    const content = args.slice(1).join(' ');
+                    injectMemory(type, content);
+                    break;
+                    
+                case 'consolidate':
+                    runConsolidation();
+                    break;
+                    
+                case 'clear':
+                    if (args[0] === 'working') {
+                        workingMemory.length = 0;
+                        updateMemoryCounts();
+                        showConsoleOutput('Working memory cleared', 'success');
+                    }
+                    break;
+                    
+                case 'status':
+                    showConsoleOutput(
+                        `Agent: ACTIVE | Attention: ${appState.attentionLevel}% | ` +
+                        `Working: ${workingMemory.length}/7 | Episodic: ${episodicMemory.length} | Semantic: ${semanticMemory.nodes.length}`,
+                        'info'
+                    );
+                    break;
+                    
+                default:
+                    showConsoleOutput('Unknown command. Available: recall, inject, consolidate, clear working, status', 'error');
+            }
+        }
+        
+        function searchMemories(query) {
+            const lowerQuery = query.toLowerCase();
+            const results = [];
+            
+            workingMemory.forEach(m => {
+                if (m.content.toLowerCase().includes(lowerQuery)) {
+                    results.push({ ...m, source: 'working' });
+                }
+            });
+            
+            episodicMemory.forEach(m => {
+                if (m.content.toLowerCase().includes(lowerQuery)) {
+                    results.push({ ...m, source: 'episodic' });
+                }
+            });
+            
+            semanticMemory.nodes.forEach(m => {
+                if (m.label.toLowerCase().includes(lowerQuery) || m.description.toLowerCase().includes(lowerQuery)) {
+                    results.push({ ...m, source: 'semantic', content: m.label + ': ' + m.description });
+                }
+            });
+            
+            return results;
+        }
+        
+        function injectMemory(type, content) {
+            switch (type) {
+                case 'working':
+                    if (workingMemory.length < 7) {
+                        workingMemory.push({
+                            id: 'wm' + Date.now(),
+                            content: content,
+                            timestamp: Date.now()
+                        });
+                        updateMemoryCounts();
+                        showConsoleOutput('Injected into working memory', 'success');
+                    } else {
+                        showConsoleOutput('Working memory full', 'error');
+                    }
+                    break;
+                    
+                case 'episodic':
+                    episodicMemory.unshift({
+                        id: 'ep' + Date.now(),
+                        type: 'conversation',
+                        content: content,
+                        timestamp: Date.now(),
+                        importance: 2,
+                        outcome: 'Manual injection'
+                    });
+                    renderTimeline();
+                    showConsoleOutput('Injected into episodic memory', 'success');
+                    break;
+                    
+                case 'semantic':
+                    const newNode = {
+                        id: 'sm' + Date.now(),
+                        label: content.substring(0, 20),
+                        size: 15,
+                        x: 100 + Math.random() * 200,
+                        y: 100 + Math.random() * 300,
+                        description: content
+                    };
+                    semanticMemory.nodes.push(newNode);
+                    updateMemoryCounts();
+                    drawSemanticGraph(graphCtx, appState.selectedNode);
+                    showConsoleOutput('Injected into semantic memory', 'success');
+                    break;
+                    
+                default:
+                    showConsoleOutput('Invalid type. Use: working, episodic, or semantic', 'error');
+            }
+        }
+        
+        consoleInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const command = consoleInput.value;
+                if (command.trim()) {
+                    parseCommand(command);
+                    consoleInput.value = '';
+                }
+            }
+        });
+        
+        /* ============================================
+           MODAL DIALOGS
+           ============================================ */
+        
+        // Inject Memory Modal
+        document.getElementById('injectMemoryBtn').addEventListener('click', () => {
+            document.getElementById('injectModal').classList.add('visible');
+        });
+        
+        document.getElementById('injectCancel').addEventListener('click', () => {
+            document.getElementById('injectModal').classList.remove('visible');
+            document.getElementById('injectContent').value = '';
+        });
+        
+        document.getElementById('injectSubmit').addEventListener('click', () => {
+            const content = document.getElementById('injectContent').value;
+            const type = document.getElementById('injectType').value;
+            
+            if (content.trim()) {
+                injectMemory(type, content);
+                document.getElementById('injectModal').classList.remove('visible');
+                document.getElementById('injectContent').value = '';
+            }
+        });
+        
+        // Add Node Modal
+        document.getElementById('addNodeBtn').addEventListener('click', () => {
+            document.getElementById('addNodeModal').classList.add('visible');
+        });
+        
+        document.getElementById('addNodeCancel').addEventListener('click', () => {
+            document.getElementById('addNodeModal').classList.remove('visible');
+            document.getElementById('nodeName').value = '';
+            document.getElementById('nodeDescription').value = '';
+        });
+        
+        document.getElementById('addNodeSubmit').addEventListener('click', () => {
+            const name = document.getElementById('nodeName').value;
+            const description = document.getElementById('nodeDescription').value;
+            
+            if (name.trim()) {
+                const newNode = {
+                    id: 'sm' + Date.now(),
+                    label: name,
+                    size: 15,
+                    x: 100 + Math.random() * 200,
+                    y: 100 + Math.random() * 300,
+                    description: description || name
+                };
+                semanticMemory.nodes.push(newNode);
+                updateMemoryCounts();
+                drawSemanticGraph(graphCtx, appState.selectedNode);
+                document.getElementById('addNodeModal').classList.remove('visible');
+                document.getElementById('nodeName').value = '';
+                document.getElementById('nodeDescription').value = '';
+                showConsoleOutput(`Added node: ${name}`, 'success');
+            }
+        });
+        
+        document.getElementById('runConsolidateBtn').addEventListener('click', runConsolidation);
+        
+        // Close modals on overlay click
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.classList.remove('visible');
+                }
+            });
+        });
+        
+        /* ============================================
+           MAIN ANIMATION LOOP
+           ============================================ */
+        
+        let lastTime = 0;
+        
+        function animate(currentTime) {
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+            
+            // Clear canvases
+            mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+            
+            // Update orbit offset
+            orbitOffset += 0.001;
+            
+            // Update core position
+            updateCorePosition();
+            
+            // Draw main canvas elements
+            drawOrbitRing(mainCtx);
+            drawWorkingMemoryBubbles(mainCtx, currentTime);
+            drawCore(mainCtx);
+            
+            // Redraw semantic graph if needed
+            if (!appState.selectedNode) {
+                drawSemanticGraph(graphCtx, appState.hoveredNode);
+            }
+            
+            // Update attention level slightly
+            appState.attentionLevel = 85 + Math.floor(Math.sin(currentTime / 10000) * 5);
+            document.getElementById('attentionLevel').textContent = appState.attentionLevel + '%';
+            
+            requestAnimationFrame(animate);
+        }
+        
+        /* ============================================
+           INITIALIZATION
+           ============================================ */
+        
+        function init() {
+            renderTimeline();
+            updateMemoryCounts();
+            drawSemanticGraph(graphCtx, null);
+            requestAnimationFrame(animate);
+            
+            showConsoleOutput('Memory system initialized. Type "status" for agent state.', 'info');
+        }
+        
+        // Start the application
+        init();
+    </script>
+</body>
+</html>
